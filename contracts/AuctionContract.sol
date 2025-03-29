@@ -158,7 +158,6 @@ contract AuctionContract {
     function endAuction(uint256 auctionId) public {
         //结束拍卖
         Auction storage auction = auctions[auctionId];
-        require(auction.finalized, "Auction has not been finalized yet.");
         require(
             auction.currentHighestBidder != address(0),
             "No bids placed yet."
