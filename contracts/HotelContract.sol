@@ -50,6 +50,7 @@ contract HotelContract is Ownable, EIP712 {
         uint256 next30daysBooking; // 未来30天的可用性（0 表示可用，1 表示已预订）
         uint256 lastBookingUpdate; // 上次预订信息更新时间戳
         bool isAvailable; // 是否可预订
+        Comment[] Comment;
     }
 
     struct Booking {
@@ -64,11 +65,21 @@ contract HotelContract is Ownable, EIP712 {
         BookingStatus status;
     }
 
+    struct Comment {
+        uint256 commmentId; // 评论ID
+        address user; // 用户地址
+        uint256 roomId;
+        string contentHash; // 评论内容哈希
+        uint8 rating; //评分
+        bool isDdeleted; // 是否删除
+    }
+
     uint256 roomCount = 0;
     Room[] rooms;
     uint256 bookingCount = 0;
     Booking[] bookings;
-    mapping(address => uint256) blance;
+    mapping(address => uint256) blance; //记录用户的余额
+    mapping(uint256 => Comment) comments; //记录用户的评论
 
     uint256 constant CHECK_IN_HOUR = 14; // 入住时间 14:00，用于计算逻辑日
     uint256 constant SECONDS_PER_DAY = 86400; //每天秒数
@@ -125,7 +136,8 @@ contract HotelContract is Ownable, EIP712 {
             price: _price,
             next30daysBooking: 0,
             lastBookingUpdate: block.timestamp,
-            isAvailable: true
+            isAvailable: true,
+            Comment: new Comment[](0)
         });
         roomCount++;
         emit roomListed(roomCount);
@@ -391,5 +403,42 @@ contract HotelContract is Ownable, EIP712 {
             }
         }
         return eligibleCount;
+    }
+
+    //添加评论
+    function addComment(
+        string calldata contentHash,
+        uint8 rating,
+        uint256 bookingId
+    ) public {
+        //bookingId校验
+        require(bookingId < bookingCount, "Booking does not exist");
+        //判断用户有没有预定
+        require(
+            bookings[bookingId].user == msg.sender,
+            "You are not the guest of this booking"
+        );
+
+        Booking storage booking = bookings[bookingId];
+
+        //写评论
+        uint256 commentId = uint32(block.timestamp); //使用当前时间戳作为评论ID
+        comments[commentId] = Comment({
+            commmentId: commentId,
+            user: msg.sender,
+            roomId: booking.roomId,
+            contentHash: contentHash,
+            rating: rating,
+            isDdeleted: false
+        });
+    }
+
+
+    function deleteComment(uint256 commentId) public {
+        require(
+            comments[commentId].user == msg.sender,
+            "Only the comment author can delete their comment."
+        );
+        comments[commentId].isDdeleted = true;
     }
 }
