@@ -269,14 +269,15 @@ contract HotelContract is Ownable, EIP712 {
             discountAmount;
 
         //从预算合约获取优惠金额
-        require(budgetAddress != address(0), "Budget contract not set");
-        BudgetContract(budgetAddress).deduction(discountAmount);
+        if(discountAmount > 0){
+            require(budgetAddress != address(0), "Budget contract not set");
+            BudgetContract(budgetAddress).deduction(discountAmount);            
+        }
 
         //预订成功。更新next30days
         room.next30daysBooking |= mask;
         room.lastBookingUpdate = block.timestamp;
 
-        bookingCount++;
         //创建订单
         bookings[bookingCount] = Booking({
             bookingId: bookingCount,
@@ -288,6 +289,7 @@ contract HotelContract is Ownable, EIP712 {
             voucherValue: discountAmount,
             status: BookingStatus.booked
         });
+        bookingCount++;
 
         emit BookingCreated(
             bookingCount,
@@ -490,4 +492,6 @@ contract HotelContract is Ownable, EIP712 {
         require(success, "Withdrawal failed");
         emit Withdrawed(msg.sender, amount);
     }
+
+    receive() external payable {}
 }
