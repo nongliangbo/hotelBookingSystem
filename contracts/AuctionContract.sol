@@ -118,7 +118,7 @@ contract AuctionContract {
     }
 
     //3. finalizeAuction（拍卖结算）
-    function finalizeAuction(uint256 auctionId) public {
+    function finalizeAuction(uint256 auctionId) public payable{
         Auction storage auction = auctions[auctionId];
         //当前时间必须大于结束时间
         require(auction.endTime < block.timestamp, "Auction has not ended.");
@@ -142,7 +142,7 @@ contract AuctionContract {
     }
 
     //4. withdraw（提取拍卖退款）
-    function withdraw(uint256 auctionId) public {
+    function withdraw(uint256 auctionId) public  payable{
         Auction storage auction = auctions[auctionId];
         require(auction.finalized, "Auction has not been finalized yet.");
         require(bids[auctionId][msg.sender] > 0, "No bid to withdraw.");
@@ -155,7 +155,7 @@ contract AuctionContract {
 
 
 
-    function endAuction(uint256 auctionId) public {
+    function endAuction(uint256 auctionId) public payable {
         //结束拍卖
         Auction storage auction = auctions[auctionId];
         require(
