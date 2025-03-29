@@ -48,14 +48,12 @@ contract HotelContract is Ownable, EIP712 {
         uint256 next30daysBooking; // 未来30天的可用性（0 表示可用，1 表示已预订）
         uint256 lastBookingUpdate; // 上次预订信息更新时间戳
         bool isAvailable; // 是否可预订
-        Comment[] Comment;
     }
 
     struct Booking {
         uint256 bookingId; // 预订的唯一标识
         uint256 roomId; // 房间的唯一标识
         address user; // 下单用户地址
-        address roomAddress; // 房间的合约地址（对应哪处房产）
         uint256 checkInTime; // 计划入住时间（时间戳）
         uint256 checkOutTime; // 计划退房时间（时间戳）
         uint256 voucherId; // 使用的优惠券ID（如未使用，则为0）
@@ -73,9 +71,9 @@ contract HotelContract is Ownable, EIP712 {
     }
 
     uint256 roomCount = 0;
-    Room[] rooms;
+    mapping(uint256 => Room) rooms;
     uint256 bookingCount = 0;
-    Booking[] bookings;
+    mapping(uint256 => Booking) bookings;
     mapping(address => uint256) blance; //记录用户的余额
     mapping(uint256 => Comment) comments; //记录用户的评论
 
@@ -93,30 +91,29 @@ contract HotelContract is Ownable, EIP712 {
     event BookingCreated(
         uint256 bookingId,
         address user,
-        address roomAddress,
+        uint256 roomId,
         uint256 checkInTime,
         uint256 checkOutTime,
         uint256 discountAmount
     );
-    event BookingFailed(address user, address roomAddress, string reason);
+    event BookingFailed(address user, uint256 roomId, string reason);
     event BookingCanceled(
         uint256 bookingId,
         address canceledBy,
         uint256 refundAmount
     );
-    event BookingSettled(
-        uint256 bookingId,
-        address user,
-        address roomAddress,
-        uint256 amount
-    );
+    event BookingSettled(uint256 bookingId, uint256 amount);
 
     function setBudgetAddress(address _budgetAddress) external onlyOwner {
         budgetAddress = _budgetAddress;
     }
 
     function getRooms() external view returns (Room[] memory) {
-        return rooms;
+        Room[] memory roomArray = new Room[](roomCount);
+        for (uint256 i = 0; i < roomCount; i++) {
+            roomArray[i] = rooms[i + 1];
+        }
+        return roomArray;
     }
 
     function listRoom(
@@ -127,7 +124,9 @@ contract HotelContract is Ownable, EIP712 {
     ) external onlyOwner {
         //判断房屋是否合法
         require(
-            ManagementContract(managementAddress).isValidHouse(_roomAddress),
+            ManagementContract(payable(managementAddress)).isValidHouse(
+                _roomAddress
+            ),
             "invalid room"
         );
         rooms[roomCount] = Room({
@@ -138,8 +137,7 @@ contract HotelContract is Ownable, EIP712 {
             price: _price,
             next30daysBooking: 0,
             lastBookingUpdate: block.timestamp,
-            isAvailable: true,
-            Comment: new Comment[](0)
+            isAvailable: true
         });
         roomCount++;
         emit roomListed(roomCount);
@@ -185,14 +183,15 @@ contract HotelContract is Ownable, EIP712 {
 
     function createBooking(
         uint256 _roomId,
-        address _roomAddress,
         uint256 _checkInTime,
         uint256 _checkOutTime,
         uint256 _voucherId,
         uint256 _voucherValue,
         bytes calldata signature
     ) external {
-        require(_roomAddress != address(0), "Invalid room address");
+        //判断房间是否存在
+        require(_roomId > 0 && _roomId <= roomCount, "Room does not exist");
+        //判断入住时间
         require(
             _checkInTime < _checkOutTime,
             "Check-in must be before check-out"
@@ -224,7 +223,7 @@ contract HotelContract is Ownable, EIP712 {
         if ((room.next30daysBooking & mask) != 0) {
             emit BookingFailed(
                 msg.sender,
-                _roomAddress,
+                _roomId,
                 "Room not available for selected dates"
             );
             return;
@@ -238,7 +237,7 @@ contract HotelContract is Ownable, EIP712 {
                 abi.encode(
                     MESSAGE_TYPEHASH,
                     msg.sender,
-                    _roomAddress,
+                    room.roomAddress,
                     _voucherId,
                     _voucherValue
                 )
@@ -277,7 +276,6 @@ contract HotelContract is Ownable, EIP712 {
             bookingId: bookingCount,
             roomId: _roomId,
             user: msg.sender,
-            roomAddress: _roomAddress,
             checkInTime: _checkInTime,
             checkOutTime: _checkOutTime,
             voucherId: _voucherId,
@@ -288,7 +286,7 @@ contract HotelContract is Ownable, EIP712 {
         emit BookingCreated(
             bookingCount,
             msg.sender,
-            _roomAddress,
+            _roomId,
             _checkInTime,
             _checkOutTime,
             discountAmount
@@ -354,42 +352,69 @@ contract HotelContract is Ownable, EIP712 {
     }
 
     //结算订单
-    function settle(uint256 bookingId) public onlyOwner returns (bool) {
+    function settle(uint256 bookingId) public onlyOwner {
         Booking storage booking = bookings[bookingId];
         // 检查订单是否符合结算条件
-        if (
-            booking.status == BookingStatus.booked &&
-            booking.checkOutTime <= block.timestamp
-        ) {
-            // 将订单状态标记为已结算
-            booking.status = BookingStatus.settled;
-            // 计算应付金额 (总价)
-            uint256 logicalCheckIn = getLogicalDate(booking.checkInTime);
-            uint256 logicalCheckOut = getLogicalDate(booking.checkOutTime);
-            uint256 totalNights = logicalCheckOut - logicalCheckIn + 1;
-            uint256 paymentAmount = rooms[booking.roomId].price * totalNights;
+        require(
+            booking.status == BookingStatus.booked,
+            "Booking is not active"
+        );
+        require(
+            block.timestamp >= booking.checkOutTime,
+            "Booking has not expired"
+        );
 
-            // 将资金转给RWA平台
-            ManagementContract(managementAddress).receiveRevenue{
-                value: paymentAmount
-            }(booking.roomAddress);
+        // 将订单状态标记为已结算
+        booking.status = BookingStatus.settled;
+        // 计算应付金额 (总价)
+        uint256 logicalCheckIn = getLogicalDate(booking.checkInTime);
+        uint256 logicalCheckOut = getLogicalDate(booking.checkOutTime);
+        uint256 totalNights = logicalCheckOut - logicalCheckIn + 1;
+        uint256 paymentAmount = rooms[booking.roomId].price * totalNights;
 
-            emit BookingSettled(
-                booking.bookingId,
-                booking.user,
-                booking.roomAddress,
-                paymentAmount
-            );
-            return true;
-        } else {
-            return false;
-        }
+        // 将资金转给RWA平台
+        ManagementContract(payable(managementAddress)).receiveRevenue{
+            value: paymentAmount
+        }(rooms[booking.roomId].roomAddress);
+
+        emit BookingSettled(booking.bookingId, paymentAmount);
+    }
+
+    //强制结算订单，用于测试
+    function forceSettle(uint256 bookingId) external onlyOwner {
+        Booking storage booking = bookings[bookingId];
+        // 检查订单是否符合结算条件
+        require(
+            booking.status == BookingStatus.booked,
+            "Booking is not active"
+        );
+
+        // 将订单状态标记为已结算
+        booking.status = BookingStatus.settled;
+        // 计算应付金额 (总价)
+        uint256 logicalCheckIn = getLogicalDate(booking.checkInTime);
+        uint256 logicalCheckOut = getLogicalDate(booking.checkOutTime);
+        uint256 totalNights = logicalCheckOut - logicalCheckIn + 1;
+        uint256 paymentAmount = rooms[booking.roomId].price * totalNights;
+
+        // 将资金转给RWA平台
+        ManagementContract(payable(managementAddress)).receiveRevenue{
+            value: paymentAmount
+        }(rooms[booking.roomId].roomAddress);
+
+        emit BookingSettled(booking.bookingId, paymentAmount);
     }
 
     // 结算所有符合条件的订单
     function settleAllEligibleBookings() external onlyOwner {
         for (uint256 i = 1; i <= bookingCount; i++) {
-            settle(i);
+            Booking storage booking = bookings[i];
+            if (
+                booking.status == BookingStatus.booked &&
+                booking.checkOutTime <= block.timestamp
+            ) {
+                settle(i);
+            }
         }
     }
 
@@ -399,7 +424,7 @@ contract HotelContract is Ownable, EIP712 {
         for (uint256 i = 1; i <= bookingCount; i++) {
             Booking storage booking = bookings[i];
             if (
-                booking.status == BookingStatus.booked && 
+                booking.status == BookingStatus.booked &&
                 booking.checkOutTime <= block.timestamp
             ) {
                 eligibleCount++;
@@ -435,7 +460,6 @@ contract HotelContract is Ownable, EIP712 {
             isDdeleted: false
         });
     }
-
 
     function deleteComment(uint256 commentId) public {
         require(

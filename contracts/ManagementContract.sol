@@ -124,4 +124,7 @@ contract ManagementContract is Ownable {
         
         return houseArray;
     }
+
+    //用于接收ETH
+    receive() external payable { }
 }

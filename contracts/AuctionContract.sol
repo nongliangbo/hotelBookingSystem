@@ -135,6 +135,12 @@ contract AuctionContract {
                 auction.currentHighestBidder, //买家 to
                 auction.tokenAmount //币的金额
             );
+        }else{
+            //流拍,返还给卖家
+            ERC20(auction.houseToken).transfer(
+                auction.seller, //买家 to
+                auction.tokenAmount //币的金额
+            );
         }
 
         auction.finalized = true;
@@ -168,9 +174,15 @@ contract AuctionContract {
             payable(auction.seller).transfer(auction.currentHighestBid);
 
             //把拍下的代币转给买家
-            ERC20(auction.houseToken).transferFrom(
-                auction.seller, //卖家 from
+            //代币已经在拍卖发起时转移到拍卖合约
+            ERC20(auction.houseToken).transfer(
                 auction.currentHighestBidder, //买家 to
+                auction.tokenAmount //币的金额
+            );
+        }else{
+            //流拍,返还给卖家
+            ERC20(auction.houseToken).transfer(
+                auction.seller, //买家 to
                 auction.tokenAmount //币的金额
             );
         }
