@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./HouseToken.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+
+import "./HouseToken.sol";
+import "./AuctionContract.sol";
 
 contract ManagementContract is Ownable {
     uint256 public platformFeeRate; // 单位: 0.01%
@@ -59,6 +61,13 @@ contract ManagementContract is Ownable {
         return false;
     }
 
+    //拍卖
+    function auctionHouse(address houseAddress, address auctionAddress, uint256 _tokenAmount, uint256 _minBid, uint256 _duration) external onlyOwner {
+        require(isValidHouse(houseAddress), "Not a registered house");
+        require(auctionAddress != address(0), "Invalid auction address");
+        ERC20(houseAddress).approve(auctionAddress, _tokenAmount);
+        AuctionContract(auctionAddress).startAuction(houseAddress, _tokenAmount, _minBid, _duration);
+    }
 
     //从酒店平台接收房租 gas由调用者（管理员）支付
     function receiveRevenue(address houseAddress) external payable {
