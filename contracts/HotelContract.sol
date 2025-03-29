@@ -76,6 +76,7 @@ contract HotelContract is Ownable, EIP712 {
     mapping(uint256 => Booking) bookings;
     mapping(address => uint256) blance; //记录用户的余额
     mapping(uint256 => Comment) comments; //记录用户的评论
+    mapping(address => bool) isListed;
 
     uint256 constant CHECK_IN_HOUR = 14; // 入住时间 14:00，用于计算逻辑日
     uint256 constant SECONDS_PER_DAY = 86400; //每天秒数
@@ -103,6 +104,8 @@ contract HotelContract is Ownable, EIP712 {
         uint256 refundAmount
     );
     event BookingSettled(uint256 bookingId, uint256 amount);
+    event Deposited(address user, uint256 amount);
+    event Withdrawed(address user, uint256 amount);
 
     function setBudgetAddress(address _budgetAddress) external onlyOwner {
         budgetAddress = _budgetAddress;
@@ -129,16 +132,19 @@ contract HotelContract is Ownable, EIP712 {
             ),
             "invalid room"
         );
+        //判断是否重复上架
+        require(!isListed[_roomAddress], "Room is already listed");
         rooms[roomCount] = Room({
             roomId: roomCount,
             roomAddress: _roomAddress,
             descriptionURL: _descriptionURL,
-            imagesURL: _imagesURL,
+            imagesURL: _imagesURL, 
             price: _price,
             next30daysBooking: 0,
             lastBookingUpdate: block.timestamp,
             isAvailable: true
         });
+        isListed[_roomAddress] = true;
         roomCount++;
         emit roomListed(roomCount);
     }
@@ -296,7 +302,7 @@ contract HotelContract is Ownable, EIP712 {
     function cancelBooking(uint256 bookingId) external {
         // 验证预订ID有效性
         require(
-            bookingId > 0 && bookingId <= bookingCount,
+            bookingId >= 0 && bookingId <= bookingCount,
             "Invalid booking ID"
         );
         Booking storage booking = bookings[bookingId];
@@ -467,5 +473,21 @@ contract HotelContract is Ownable, EIP712 {
             "Only the comment author can delete their comment."
         );
         comments[commentId].isDdeleted = true;
+    }
+
+    //充值余额
+    function deposit() public payable {
+        require(msg.value > 0, "Deposit amount must be greater than 0");
+        blance[msg.sender] += msg.value;
+        emit Deposited(msg.sender, msg.value);
+    }
+
+    //提取余额
+    function withdraw(uint256 amount) public {
+        require(amount <= blance[msg.sender], "Insufficient balance");
+        blance[msg.sender] -= amount;
+        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        require(success, "Withdrawal failed");
+        emit Withdrawed(msg.sender, amount);
     }
 }
