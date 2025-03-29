@@ -196,7 +196,7 @@ contract HotelContract is Ownable, EIP712 {
         bytes calldata signature
     ) external {
         //判断房间是否存在
-        require(_roomId > 0 && _roomId <= roomCount, "Room does not exist");
+        require(_roomId >= 0 && _roomId <= roomCount, "Room does not exist");
         //判断入住时间
         require(
             _checkInTime < _checkOutTime,
