@@ -18,11 +18,9 @@ contract HotelContract is Ownable, EIP712 {
     //EIP712 用于签名
     constructor(
         address owner,
-        address _managementAddress,
-        address _budgetAddress
+        address _managementAddress
     ) Ownable(owner) EIP712("HotelBookingSystem", "1") {
         managementAddress = _managementAddress;
-        budgetAddress = _budgetAddress;
     }
 
     struct VoucherSignedMessage {
@@ -112,6 +110,10 @@ contract HotelContract is Ownable, EIP712 {
         address roomAddress,
         uint256 amount
     );
+
+    function setBudgetAddress(address _budgetAddress) external onlyOwner {
+        budgetAddress = _budgetAddress;
+    }
 
     function getRooms() external view returns (Room[] memory) {
         return rooms;
@@ -262,6 +264,7 @@ contract HotelContract is Ownable, EIP712 {
             discountAmount;
 
         //从预算合约获取优惠金额
+        require(budgetAddress != address(0), "Budget contract not set");
         BudgetContract(budgetAddress).deduction(discountAmount);
 
         //预订成功。更新next30days
