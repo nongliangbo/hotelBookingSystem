@@ -152,4 +152,31 @@ contract AuctionContract {
 
         payable(msg.sender).transfer(refundAmount);
     }
+
+
+
+    function endAuction(uint256 auctionId) public {
+        //结束拍卖
+        Auction storage auction = auctions[auctionId];
+        require(auction.finalized, "Auction has not been finalized yet.");
+        require(
+            auction.currentHighestBidder != address(0),
+            "No bids placed yet."
+        );
+
+        if (auction.currentHighestBidder != address(0)) {
+            //把当前合约的拍卖款转给拍卖人
+            payable(auction.seller).transfer(auction.currentHighestBid);
+
+            //把拍下的代币转给买家
+            ERC20(auction.houseToken).transferFrom(
+                auction.seller, //卖家 from
+                auction.currentHighestBidder, //买家 to
+                auction.tokenAmount //币的金额
+            );
+        }
+
+        auction.finalized = true;
+        emit AuctionFinalized(auctionId);
+    }
 }
