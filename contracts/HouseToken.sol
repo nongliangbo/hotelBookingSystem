@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+import "hardhat/console.sol";
+
 contract HouseToken is ERC20 {
     address public management; //记录创建的平台
     string public description; //TODO 改为hash
@@ -50,8 +52,11 @@ contract HouseToken is ERC20 {
         uint256 dividends = (dividendsPerShare - dividendCreditedTo[msg.sender]) * balanceOf(msg.sender);
         require(dividends > 0, "No dividends to withdraw");
         
+        console.log("dividends:", dividends);
+        console.log("dividendCreditedTo[msg.sender]:", dividendCreditedTo[msg.sender]);
         //先记账再转账
         dividendCreditedTo[msg.sender] = dividendsPerShare;
+
         (bool success, ) = msg.sender.call{value: dividends}("");
         require(success, "Dividend transfer failed");
         

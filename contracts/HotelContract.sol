@@ -4,6 +4,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import "hardhat/console.sol";
+
 import "./ManagementContract.sol";
 import "./BudgetContract.sol";
 
@@ -71,12 +73,12 @@ contract HotelContract is Ownable, EIP712 {
     }
 
     uint256 roomCount = 0;
-    mapping(uint256 => Room) rooms;
+    mapping(uint256 => Room) public rooms;
     uint256 bookingCount = 0;
-    mapping(uint256 => Booking) bookings;
-    mapping(address => uint256) blance; //记录用户的余额
-    mapping(uint256 => Comment) comments; //记录用户的评论
-    mapping(address => bool) isListed;
+    mapping(uint256 => Booking) public bookings;
+    mapping(address => uint256) public blance; //记录用户的余额
+    mapping(uint256 => Comment) public comments; //记录用户的评论
+    mapping(address => bool) public isListed;
 
     uint256 constant CHECK_IN_HOUR = 14; // 入住时间 14:00，用于计算逻辑日
     uint256 constant SECONDS_PER_DAY = 86400; //每天秒数
@@ -236,9 +238,11 @@ contract HotelContract is Ownable, EIP712 {
         }
 
         uint256 discountAmount = 0;
+        console.log("before singature check");
         // 验证优惠券签名
         // 签名内容 address user,address roomAddress,uint256 voucherId,uint256 voucherValue
         if (signature.length != 0) {
+            console.log("singature check");
             bytes32 structHash = keccak256(
                 abi.encode(
                     MESSAGE_TYPEHASH,
@@ -256,6 +260,7 @@ contract HotelContract is Ownable, EIP712 {
             );
             discountAmount = _voucherValue;
         }
+        console.log("after singature check");
 
         require(
             blance[msg.sender] + discountAmount >

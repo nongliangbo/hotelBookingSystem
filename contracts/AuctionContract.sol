@@ -130,8 +130,13 @@ contract AuctionContract {
             payable(auction.seller).transfer(auction.currentHighestBid);
 
             //把拍下的代币转给买家
-            ERC20(auction.houseToken).transferFrom(
+            /*ERC20(auction.houseToken).transferFrom(
                 auction.seller, //卖家 from
+                auction.currentHighestBidder, //买家 to
+                auction.tokenAmount //币的金额
+            );*/
+            //把拍下的代币转给买家
+            ERC20(auction.houseToken).transfer(
                 auction.currentHighestBidder, //买家 to
                 auction.tokenAmount //币的金额
             );
